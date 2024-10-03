@@ -1,0 +1,97 @@
+---
+title: "rhizosphere"
+author: "Haydeé Peruyero"
+date: "2024-09-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, echo=FALSE}
+library("phyloseq")
+library("ggplot2")
+library("RColorBrewer")
+library("patchwork")
+library(readr)
+library(tidyverse)
+library(googlesheets4)
+#gs4_auth()
+#library(grid)
+#library(gridExtra)
+```
+
+```{r, echo=FALSE}
+raw_metagenomes <- import_biom("/files2/rhizosphere/data/tables/read-biom.json")
+raw_metagenomes@tax_table@.Data <- substring(raw_metagenomes@tax_table@.Data, 4)
+colnames(raw_metagenomes@tax_table@.Data)<- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species")
+```
+
+
+```{r, echo=FALSE}
+sheet_url <- "https://docs.google.com/spreadsheets/d/1f8l-wfMqngcaqajeybX2celb7g9wNLd3-Ix8tjNqM3Q/edit?usp=sharing"  
+
+# Leer todos los datos de la hoja
+data <- read_sheet(sheet_url)
+```
+
+
+```{r}
+data <- as.data.frame(data)
+data <- data[,-1]
+df_metadata <- sample_data(data)
+rownames(df_metadata) <- data$sample_id
+```
+
+```{r}
+all_data <- merge_phyloseq(raw_metagenomes, sample_data(df_metadata))
+```
+
+
+```{r}
+dprof <- data.frame(Samples = colnames(all_data@otu_table@.Data),
+                    Reads = sample_sums(all_data),
+                    Host_name = all_data@sam_data@.Data[[8]])
+```
+
+```{r}
+reads <- ggplot(data = dprof, mapping = aes(x = Samples, y = Reads))+
+  geom_bar(stat = "identity", aes( fill = Host_name)) +
+  #scale_fill_manual(values=c("#b8860b", "#FFBF00"))+
+  #facet_wrap(~Bee, scales = "free") +
+  labs(title = "Deep")+
+  theme(axis.text.x = element_text(angle = 55, hjust = 1))+
+  theme(
+    text = element_text(size = 16), # Cambia el tipo de letra y tamaño
+    plot.title = element_text(size = 16, face = "bold"), # Tamaño y estilo del título
+    axis.title.x = element_text(size = 14, face = "bold"), # Tamaño y estilo del título del eje X
+    axis.title.y = element_text(size = 14, face = "bold"), # Tamaño y estilo del título del eje Y
+    axis.text.x = element_text(size = 12), # Tamaño de las etiquetas del eje X
+    axis.text.y = element_text(size = 12), # Tamaño de las etiquetas del eje Y
+    legend.title = element_text(size = 14, face = "bold"), # Tamaño y estilo del título de la leyenda
+    legend.text = element_text(size = 14) # Tamaño del texto de la leyenda
+  )
+  
+reads
+```
+
+
+
+```{r}
+#unique(all_data@tax_table@.Data[,"Kingdom"])
+
+all_metagenomes <- subset_taxa(all_data, Kingdom == "Bacteria")
+
+all_metagenomes@sam_data['Deep'] <- sample_sums(all_metagenomes)
+```
+
+
+```{r}
+alpha_div_plot <- plot_richness(physeq = all_metagenomes, color = 'Deep',
+                                title = "Alpha diversity indexes",
+                                measures = c("Observed","Chao1","Shannon")) 
+
+alpha_div_plot
+```
